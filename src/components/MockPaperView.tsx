@@ -1,19 +1,23 @@
 import { useMemo, useState } from 'react';
 import {
+  AlertCircle,
   Check,
   CheckCircle2,
   Copy,
   Download,
   Eye,
   EyeOff,
+  Loader2,
+  RotateCcw,
   Search,
+  Shuffle,
   Sparkles,
   XCircle,
 } from 'lucide-react';
 import {
-  ALL_CONTEXTS,
-  ALL_QUESTIONS,
   exportPaperToMarkdown,
+  getLocalizedContext,
+  getLocalizedQuestion,
 } from '../data/mockPaper';
 import {
   Difficulty,
@@ -22,19 +26,51 @@ import {
   QuestionLabel,
   SECTIONS,
   SectionId,
+  SharedContextBlock,
 } from '../data/types';
+import {
+  Language,
+  localizeDifficulty,
+  localizeLabel,
+  localizeTopic,
+  SECTION_TEXT,
+  UI_TEXT,
+} from '../i18n/ui';
 import { DataChart } from './DataChart';
 import { DataTable } from './DataTable';
 
 interface MockPaperViewProps {
+  lang: Language;
+  questions: ExamQuestion[];
+  contexts: Record<string, SharedContextBlock>;
+  paperSource: 'standard' | 'generated';
+  isGenerating: boolean;
+  generationProgress: string | null;
+  generationError: string | null;
+  onGenerateNewPaper: () => void;
+  onRestoreStandard: () => void;
   onLaunchCbt: () => void;
 }
 
 const OPTION_KEYS: OptionKey[] = ['A', 'B', 'C', 'D'];
 
-export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
+export function MockPaperView({
+  lang,
+  questions,
+  contexts,
+  paperSource,
+  isGenerating,
+  generationProgress,
+  generationError,
+  onGenerateNewPaper,
+  onRestoreStandard,
+  onLaunchCbt,
+}: MockPaperViewProps) {
+  const t = UI_TEXT[lang];
   const [activeSection, setActiveSection] = useState<'ALL' | SectionId>('ALL');
-  const [difficultyFilter, setDifficultyFilter] = useState<'ALL' | Difficulty>('ALL');
+  const [difficultyFilter, setDifficultyFilter] = useState<'ALL' | Difficulty>(
+    'ALL'
+  );
   const [labelFilter, setLabelFilter] = useState<'ALL' | QuestionLabel>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllSolutions, setShowAllSolutions] = useState(true);
@@ -46,20 +82,22 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
 
   const filteredQuestions = useMemo(() => {
     const qLower = searchQuery.trim().toLowerCase();
-    return ALL_QUESTIONS.filter((q) => {
+    return questions.filter((q) => {
       if (activeSection !== 'ALL' && q.sectionId !== activeSection) return false;
-      if (difficultyFilter !== 'ALL' && q.difficulty !== difficultyFilter) return false;
+      if (difficultyFilter !== 'ALL' && q.difficulty !== difficultyFilter)
+        return false;
       if (labelFilter !== 'ALL' && q.label !== labelFilter) return false;
       if (qLower) {
-        const hay = `${q.id} q${q.id} ${q.topic} ${q.question} ${q.explanation}`.toLowerCase();
+        const loc = getLocalizedQuestion(q, lang);
+        const hay = `${q.id} q${q.id} ${q.topic} ${localizeTopic(q.topic, 'hi')} ${q.question} ${loc.question} ${loc.explanation}`.toLowerCase();
         if (!hay.includes(qLower)) return false;
       }
       return true;
     });
-  }, [activeSection, difficultyFilter, labelFilter, searchQuery]);
+  }, [questions, activeSection, difficultyFilter, labelFilter, searchQuery, lang]);
 
   const handleCopyMarkdown = async () => {
-    const md = exportPaperToMarkdown();
+    const md = exportPaperToMarkdown(questions, contexts, lang);
     try {
       await navigator.clipboard.writeText(md);
       setCopiedMarkdown(true);
@@ -70,12 +108,12 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
   };
 
   const handleDownloadMarkdown = () => {
-    const md = exportPaperToMarkdown();
+    const md = exportPaperToMarkdown(questions, contexts, lang);
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'RRB-Station-Master-CEN-08-2026-Mock-Paper.md';
+    a.download = `RRB-Station-Master-CEN-08-2026-Mock-Paper-${lang}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -93,7 +131,6 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
     }
   };
 
-  // Track rendered shared context blocks so each DI table or RC passage prints once right before its first visible question
   const renderedContexts = new Set<string>();
 
   return (
@@ -103,16 +140,13 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
           <div className="max-w-3xl space-y-2.5">
             <div className="text-xs font-medium text-blue-700 tracking-wide">
-              CEN No. 08/2026 · Computer-Based Test Mock Paper · Strictly Syllabus-Aligned
+              {t.paperKicker}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-              RRB Station Master Complete 100-Question CBT Mock Paper
+              {t.paperTitle}
             </h1>
             <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-              Verified 100-question examination covering Basic Science & Mathematics, Data Analysis &
-              Interpretation, Logical Capability (with original Reading Comprehension), and Mental
-              Reasoning. Ordered progressively from Easy to Difficult within every section, with zero
-              General Knowledge or trivia.
+              {t.paperSubtitle}
             </p>
           </div>
 
@@ -120,69 +154,132 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
             <button
               type="button"
               onClick={handleCopyMarkdown}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               {copiedMarkdown ? (
                 <>
                   <Check className="w-4 h-4 text-emerald-600" />
-                  Copied Markdown
+                  {t.copiedMd}
                 </>
               ) : (
                 <>
                   <Copy className="w-4 h-4 text-slate-500" />
-                  Copy Full Paper (.md)
+                  {t.copyMd}
                 </>
               )}
             </button>
             <button
               type="button"
               onClick={handleDownloadMarkdown}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Download className="w-4 h-4 text-slate-500" />
-              Download .md
+              {t.downloadMd}
             </button>
             <button
               type="button"
               onClick={onLaunchCbt}
               className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-blue-700 rounded-lg hover:bg-blue-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              Take Timed CBT Test
+              {t.takeCbt}
             </button>
           </div>
         </div>
 
+        {/* Randomized Bilingual AI Generator Bar */}
+        <div className="mt-6 pt-5 border-t border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
+          <div className="text-xs text-slate-600">
+            <span className="font-semibold text-slate-800">
+              {paperSource === 'standard'
+                ? t.activePaperStandard
+                : t.activePaperGenerated}
+            </span>
+            {generationProgress && (
+              <span className="ml-2 text-blue-700 font-medium">
+                · {generationProgress}
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {paperSource === 'generated' && (
+              <button
+                type="button"
+                onClick={onRestoreStandard}
+                disabled={isGenerating}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {t.restoreStandardPaper}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onGenerateNewPaper}
+              disabled={isGenerating}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-900 bg-slate-100 border border-slate-300 rounded-lg hover:bg-slate-200/80 disabled:opacity-60 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-700" />
+                  {t.generatingPaper}
+                </>
+              ) : (
+                <>
+                  <Shuffle className="w-3.5 h-3.5 text-blue-700" />
+                  {t.generateAiPaper}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {generationError && (
+          <div className="mt-4 p-3.5 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-2.5 text-xs text-rose-800">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <span>{generationError}</span>
+          </div>
+        )}
+
         {/* 4-column Key Exam Parameters strip */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-200">
           <div>
-            <div className="text-xs text-slate-500">Total Questions</div>
+            <div className="text-xs text-slate-500">{t.statQuestions}</div>
             <div className="text-lg font-bold font-mono tabular-nums text-slate-900 mt-0.5">
-              100 MCQs
+              {questions.length} {lang === 'hi' ? 'प्रश्न' : 'MCQs'}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">4 Sections · Q1 to Q100</div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              {t.statQuestionsSub}
+            </div>
           </div>
           <div>
-            <div className="text-xs text-slate-500">Duration</div>
+            <div className="text-xs text-slate-500">{t.statDuration}</div>
             <div className="text-lg font-bold font-mono tabular-nums text-slate-900 mt-0.5">
-              120 Minutes
+              {t.statDurationVal}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">1.20 min average per Q</div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              {t.statDurationSub}
+            </div>
           </div>
           <div>
-            <div className="text-xs text-slate-500">Marking Scheme</div>
+            <div className="text-xs text-slate-500">{t.statMarking}</div>
             <div className="text-lg font-bold font-mono tabular-nums text-slate-900 mt-0.5">
-              +1 / −0.33
+              {t.statMarkingVal}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">100 Max Marks · −1/3 wrong</div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              {t.statMarkingSub}
+            </div>
           </div>
           <div>
-            <div className="text-xs text-slate-500">Difficulty Gradient</div>
+            <div className="text-xs text-slate-500">{t.statDifficulty}</div>
             <div className="text-lg font-bold font-mono tabular-nums text-slate-900 mt-0.5">
-              {ALL_QUESTIONS.filter((q) => q.difficulty === 'Easy').length} /{' '}
-              {ALL_QUESTIONS.filter((q) => q.difficulty === 'Moderate').length} /{' '}
-              {ALL_QUESTIONS.filter((q) => q.difficulty === 'Difficult').length}
+              {questions.filter((q) => q.difficulty === 'Easy').length} /{' '}
+              {questions.filter((q) => q.difficulty === 'Moderate').length} /{' '}
+              {questions.filter((q) => q.difficulty === 'Difficult').length}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">Easy / Moderate / Difficult</div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              {t.statDifficultySub}
+            </div>
           </div>
         </div>
       </section>
@@ -201,7 +298,7 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              All 100 Qs
+              {t.all100Qs}
             </button>
             {SECTIONS.map((sec) => (
               <button
@@ -214,7 +311,8 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {sec.code}: {sec.shortTitle} ({sec.count})
+                {SECTION_TEXT[sec.id].code[lang]}:{' '}
+                {SECTION_TEXT[sec.id].shortTitle[lang]} ({sec.count})
               </button>
             ))}
           </div>
@@ -227,7 +325,7 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter by topic or Q#..."
+                placeholder={t.searchPlaceholder}
                 className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-blue-600"
               />
             </div>
@@ -240,12 +338,12 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
               {showAllSolutions ? (
                 <>
                   <EyeOff className="w-3.5 h-3.5 text-slate-500" />
-                  Hide Solutions (Practice)
+                  {t.hideSolutions}
                 </>
               ) : (
                 <>
                   <Eye className="w-3.5 h-3.5 text-blue-700" />
-                  Show All Solutions
+                  {t.showSolutions}
                 </>
               )}
             </button>
@@ -256,33 +354,45 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-slate-500 font-medium">Difficulty:</span>
+              <span className="text-slate-500 font-medium">
+                {t.difficultyLabel}
+              </span>
               <div className="flex items-center gap-1">
-                {(['ALL', 'Easy', 'Moderate', 'Difficult'] as const).map((diff) => (
-                  <button
-                    key={diff}
-                    type="button"
-                    onClick={() => setDifficultyFilter(diff)}
-                    className={`px-2.5 py-1 rounded-md font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                      difficultyFilter === diff
-                        ? 'bg-slate-900 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    {diff === 'ALL' ? 'All' : diff}
-                  </button>
-                ))}
+                {(['ALL', 'Easy', 'Moderate', 'Difficult'] as const).map(
+                  (diff) => (
+                    <button
+                      key={diff}
+                      type="button"
+                      onClick={() => setDifficultyFilter(diff)}
+                      className={`px-2.5 py-1 rounded-md font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                        difficultyFilter === diff
+                          ? 'bg-slate-900 text-white'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {diff === 'ALL' ? t.all : localizeDifficulty(diff, lang)}
+                    </button>
+                  )
+                )}
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-slate-500 font-medium">Pattern:</span>
+              <span className="text-slate-500 font-medium">
+                {t.patternLabel}
+              </span>
               <div className="flex items-center gap-1">
                 {(
                   [
-                    { key: 'ALL', text: 'All' },
-                    { key: 'Previous-Year Pattern Question', text: 'Previous-Year Pattern' },
-                    { key: 'Model Practice Question', text: 'Model Practice' },
+                    { key: 'ALL', text: t.all },
+                    {
+                      key: 'Previous-Year Pattern Question',
+                      text: t.prevYearShort,
+                    },
+                    {
+                      key: 'Model Practice Question',
+                      text: t.modelPracticeShort,
+                    },
                   ] as const
                 ).map((item) => (
                   <button
@@ -303,7 +413,7 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
           </div>
 
           <div className="text-slate-500 font-mono tabular-nums">
-            Showing {filteredQuestions.length} of {ALL_QUESTIONS.length} questions
+            {t.showingCount(filteredQuestions.length, questions.length)}
           </div>
         </div>
       </section>
@@ -312,11 +422,9 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
       {filteredQuestions.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl p-12 text-center space-y-2">
           <div className="text-base font-semibold text-slate-900">
-            No questions match the selected filters
+            {t.noMatchesTitle}
           </div>
-          <p className="text-sm text-slate-500">
-            Reset the section, difficulty, or search term to view all 100 questions.
-          </p>
+          <p className="text-sm text-slate-500">{t.noMatchesDesc}</p>
           <button
             type="button"
             onClick={() => {
@@ -327,7 +435,7 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
             }}
             className="mt-3 px-4 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 cursor-pointer"
           >
-            Reset Filters
+            {t.resetFilters}
           </button>
         </div>
       ) : (
@@ -337,13 +445,17 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
             const showSectionBanner = !prevQ || prevQ.sectionId !== q.sectionId;
             const secMeta = SECTIONS.find((s) => s.id === q.sectionId)!;
 
-            let contextBlock = null;
+            let rawContext: SharedContextBlock | null = null;
             if (q.contextId && !renderedContexts.has(q.contextId)) {
               renderedContexts.add(q.contextId);
-              contextBlock = ALL_CONTEXTS[q.contextId];
+              rawContext = contexts[q.contextId] ?? null;
             }
+            const locContext = rawContext
+              ? getLocalizedContext(rawContext, lang)
+              : null;
 
-            const isSolutionVisible = showAllSolutions || Boolean(revealedIds[q.id]);
+            const isSolutionVisible =
+              showAllSolutions || Boolean(revealedIds[q.id]);
             const picked = selfPracticeAnswers[q.id];
 
             return (
@@ -352,59 +464,69 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
                   <div className="pt-4 pb-2 border-b border-slate-300 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
                     <div>
                       <h2 className="text-xl font-bold text-slate-900">
-                        {secMeta.code}: {secMeta.title}
+                        {SECTION_TEXT[secMeta.id].code[lang]}:{' '}
+                        {SECTION_TEXT[secMeta.id].title[lang]}
                       </h2>
-                      <p className="text-xs text-slate-600 mt-1">{secMeta.syllabusSummary}</p>
+                      <p className="text-xs text-slate-600 mt-1">
+                        {SECTION_TEXT[secMeta.id].syllabus[lang]}
+                      </p>
                     </div>
                     <span className="text-xs font-mono tabular-nums text-slate-500 whitespace-nowrap shrink-0">
-                      Q{secMeta.questionRange[0]}–Q{secMeta.questionRange[1]} · {secMeta.count} Marks
+                      Q{secMeta.questionRange[0]}–Q{secMeta.questionRange[1]} ·{' '}
+                      {secMeta.count} {t.marks}
                     </span>
                   </div>
                 )}
 
-                {contextBlock && (
+                {rawContext && locContext && (
                   <div className="bg-slate-100/80 border border-slate-200 rounded-xl p-5 sm:p-6 space-y-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <h3 className="text-base font-bold text-slate-900">
-                        Directions ({contextBlock.rangeLabel}): {contextBlock.title}
+                        {t.directions} ({rawContext.rangeLabel}):{' '}
+                        {locContext.title}
                       </h3>
-                      {contextBlock.theme && (
+                      {locContext.theme && (
                         <span className="text-xs font-medium text-slate-500">
-                          Theme: {contextBlock.theme}
+                          {t.theme}: {locContext.theme}
                         </span>
                       )}
                     </div>
 
-                    {contextBlock.introText && (
+                    {locContext.introText && (
                       <p className="text-sm text-slate-700 leading-relaxed">
-                        {contextBlock.introText}
+                        {locContext.introText}
                       </p>
                     )}
 
-                    {contextBlock.passageParagraphs && (
+                    {locContext.passageParagraphs && (
                       <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3 text-sm sm:text-[15px] text-slate-800 leading-relaxed">
-                        {contextBlock.passageParagraphs.map((para, pIdx) => (
+                        {locContext.passageParagraphs.map((para, pIdx) => (
                           <p key={pIdx}>{para}</p>
                         ))}
                       </div>
                     )}
 
-                    {(contextBlock.table || contextBlock.chart) && (
+                    {(locContext.table || locContext.chart) && (
                       <div
                         className={`grid gap-4 ${
-                          contextBlock.table && contextBlock.chart
+                          locContext.table && locContext.chart
                             ? 'grid-cols-1 lg:grid-cols-2 items-start'
                             : 'grid-cols-1'
                         }`}
                       >
-                        {contextBlock.table && <DataTable table={contextBlock.table} />}
-                        {contextBlock.chart && <DataChart chart={contextBlock.chart} />}
+                        {locContext.table && (
+                          <DataTable table={locContext.table} lang={lang} />
+                        )}
+                        {locContext.chart && (
+                          <DataChart chart={locContext.chart} lang={lang} />
+                        )}
                       </div>
                     )}
                   </div>
                 )}
 
                 <QuestionArticle
+                  lang={lang}
                   question={q}
                   picked={picked}
                   isSolutionVisible={isSolutionVisible}
@@ -421,6 +543,7 @@ export function MockPaperView({ onLaunchCbt }: MockPaperViewProps) {
 }
 
 interface QuestionArticleProps {
+  lang: Language;
   question: ExamQuestion;
   picked?: OptionKey;
   isSolutionVisible: boolean;
@@ -429,18 +552,33 @@ interface QuestionArticleProps {
 }
 
 function QuestionArticle({
+  lang,
   question: q,
   picked,
   isSolutionVisible,
   onSelectOption,
   onToggleReveal,
 }: QuestionArticleProps) {
+  const t = UI_TEXT[lang];
+  const loc = getLocalizedQuestion(q, lang);
+
   const diffColor =
     q.difficulty === 'Easy'
       ? 'text-emerald-700'
       : q.difficulty === 'Moderate'
       ? 'text-amber-700'
       : 'text-rose-700';
+
+  const subSectionText =
+    q.subSection === 'Logical Reasoning'
+      ? lang === 'hi'
+        ? 'तार्किक तर्कशक्ति'
+        : 'Logical Reasoning'
+      : q.subSection === 'Reading Comprehension'
+      ? lang === 'hi'
+        ? 'अपठित गद्यांश'
+        : 'Reading Comprehension'
+      : null;
 
   return (
     <article className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 space-y-4">
@@ -453,49 +591,55 @@ function QuestionArticle({
           <span className="text-slate-300" aria-hidden="true">
             –
           </span>
-          <span className="font-semibold text-slate-900">{q.topic}</span>
-          {q.subSection && (
+          <span className="font-semibold text-slate-900">
+            {localizeTopic(q.topic, lang)}
+          </span>
+          {subSectionText && (
             <>
               <span className="text-slate-300" aria-hidden="true">
                 ·
               </span>
-              <span className="text-xs text-slate-500">{q.subSection}</span>
+              <span className="text-xs text-slate-500">{subSectionText}</span>
             </>
           )}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
           <span className={`font-semibold ${diffColor}`}>
-            Difficulty: {q.difficulty}
+            {t.difficultyLabel} {localizeDifficulty(q.difficulty, lang)}
           </span>
           <span aria-hidden="true">·</span>
-          <span>[{q.label}]</span>
+          <span>[{localizeLabel(q.label, lang)}]</span>
         </div>
       </div>
 
       {/* Inline Table / Chart for standalone DI or Matrix questions */}
-      {(q.inlineTable || q.inlineChart) && (
+      {(loc.inlineTable || loc.inlineChart) && (
         <div
           className={`grid gap-4 ${
-            q.inlineTable && q.inlineChart
+            loc.inlineTable && loc.inlineChart
               ? 'grid-cols-1 lg:grid-cols-2 items-start'
               : 'grid-cols-1'
           }`}
         >
-          {q.inlineTable && <DataTable table={q.inlineTable} />}
-          {q.inlineChart && <DataChart chart={q.inlineChart} />}
+          {loc.inlineTable && (
+            <DataTable table={loc.inlineTable} lang={lang} />
+          )}
+          {loc.inlineChart && (
+            <DataChart chart={loc.inlineChart} lang={lang} />
+          )}
         </div>
       )}
 
       {/* Question Text */}
       <div className="space-y-2.5">
         <p className="text-[15px] sm:text-base font-medium text-slate-900 leading-relaxed">
-          {q.question}
+          {loc.question}
         </p>
 
-        {q.statements && q.statements.length > 0 && (
+        {loc.statements && loc.statements.length > 0 && (
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-1.5 text-sm text-slate-800">
-            {q.statements.map((st, sIdx) => (
+            {loc.statements.map((st, sIdx) => (
               <p key={sIdx} className="leading-relaxed">
                 {st}
               </p>
@@ -531,19 +675,19 @@ function QuestionArticle({
                 <span className="font-mono font-semibold text-slate-500 shrink-0">
                   {key}.
                 </span>
-                <span className="leading-snug">{q.options[key]}</span>
+                <span className="leading-snug">{loc.options[key]}</span>
               </div>
 
               {isSolutionVisible && isCorrect && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 shrink-0">
                   <CheckCircle2 className="w-4 h-4" />
-                  Correct
+                  {t.correctBadge}
                 </span>
               )}
               {isSolutionVisible && isPicked && !isCorrect && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-700 shrink-0">
                   <XCircle className="w-4 h-4" />
-                  Wrong
+                  {t.wrongBadge}
                 </span>
               )}
             </button>
@@ -556,39 +700,42 @@ function QuestionArticle({
         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2.5 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="font-semibold text-emerald-800">
-              Correct Answer: {q.correctOption}. {q.options[q.correctOption]}
+              {t.correctAnswer}: {q.correctOption}.{' '}
+              {loc.options[q.correctOption]}
             </div>
             <button
               type="button"
               onClick={() => onToggleReveal(q.id)}
               className="text-xs font-medium text-slate-500 hover:text-slate-800 no-print cursor-pointer"
             >
-              Hide Explanation
+              {t.hideExplanation}
             </button>
           </div>
           <p className="text-slate-700 leading-relaxed">
-            <span className="font-semibold text-slate-900">Explanation: </span>
-            {q.explanation}
+            <span className="font-semibold text-slate-900">
+              {t.explanation}:{' '}
+            </span>
+            {loc.explanation}
           </p>
           <p className="text-slate-700 leading-relaxed pt-2 border-t border-slate-200 flex items-start gap-2">
             <Sparkles className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
             <span>
-              <span className="font-semibold text-slate-900">Shortcut / Trick: </span>
-              {q.shortcut}
+              <span className="font-semibold text-slate-900">
+                {t.shortcut}:{' '}
+              </span>
+              {loc.shortcut}
             </span>
           </p>
         </div>
       ) : (
         <div className="flex items-center justify-between pt-1 no-print">
-          <span className="text-xs text-slate-500">
-            Select an option above to check your answer or reveal the worked solution.
-          </span>
+          <span className="text-xs text-slate-500">{t.revealPrompt}</span>
           <button
             type="button"
             onClick={() => onToggleReveal(q.id)}
             className="text-xs font-semibold text-blue-700 hover:text-blue-900 cursor-pointer"
           >
-            Reveal Answer & Shortcut
+            {t.revealBtn}
           </button>
         </div>
       )}

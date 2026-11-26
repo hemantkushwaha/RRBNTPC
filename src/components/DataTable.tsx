@@ -1,25 +1,30 @@
+import { getLocalizedTable } from '../data/mockPaper';
 import { DataTableBlock } from '../data/types';
+import { Language } from '../i18n/ui';
 
 interface DataTableProps {
   table: DataTableBlock;
+  lang: Language;
   compact?: boolean;
 }
 
-export function DataTable({ table, compact = false }: DataTableProps) {
+export function DataTable({ table, lang, compact = false }: DataTableProps) {
+  const localized = getLocalizedTable(table, lang);
+
   return (
     <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
       <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-4">
         <span className="text-xs font-semibold text-slate-800">
-          {table.title}
+          {localized.title}
         </span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/60">
-              {table.headers.map((header, idx) => (
+              {localized.headers.map((header, idx) => (
                 <th
-                  key={header}
+                  key={`${header}-${idx}`}
                   className={`${
                     compact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-xs'
                   } font-semibold text-slate-700 whitespace-nowrap ${
@@ -32,7 +37,7 @@ export function DataTable({ table, compact = false }: DataTableProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {table.rows.map((row, rIdx) => (
+            {localized.rows.map((row, rIdx) => (
               <tr key={rIdx} className="hover:bg-slate-50/70 transition-colors">
                 {row.map((cell, cIdx) => (
                   <td
@@ -53,9 +58,9 @@ export function DataTable({ table, compact = false }: DataTableProps) {
           </tbody>
         </table>
       </div>
-      {table.note && (
+      {localized.note && (
         <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-xs text-slate-600">
-          {table.note}
+          {localized.note}
         </div>
       )}
     </div>

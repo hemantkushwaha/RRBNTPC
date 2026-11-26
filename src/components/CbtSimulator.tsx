@@ -12,14 +12,35 @@ import {
   Send,
   XCircle,
 } from 'lucide-react';
-import { ALL_CONTEXTS, ALL_QUESTIONS } from '../data/mockPaper';
-import { OptionKey, SECTIONS } from '../data/types';
+import { getLocalizedContext, getLocalizedQuestion } from '../data/mockPaper';
+import {
+  ExamQuestion,
+  OptionKey,
+  SECTIONS,
+  SharedContextBlock,
+} from '../data/types';
+import {
+  Language,
+  localizeDifficulty,
+  localizeLabel,
+  localizeTopic,
+  SECTION_TEXT,
+  UI_TEXT,
+} from '../i18n/ui';
 import { DataChart } from './DataChart';
 import { DataTable } from './DataTable';
+import { LanguageToggle } from './LanguageToggle';
 
 const TOTAL_SECONDS = 120 * 60;
 const STORAGE_KEY = 'rrb_sm_cen08_2026_cbt_state_v1';
 const OPTION_KEYS: OptionKey[] = ['A', 'B', 'C', 'D'];
+
+interface CbtSimulatorProps {
+  lang: Language;
+  onChangeLang: (lang: Language) => void;
+  questions: ExamQuestion[];
+  contexts: Record<string, SharedContextBlock>;
+}
 
 interface SavedCbtState {
   answers: Record<number, OptionKey>;
@@ -48,24 +69,40 @@ function formatClock(totalSeconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export function CbtSimulator() {
+export function CbtSimulator({
+  lang,
+  onChangeLang,
+  questions,
+  contexts,
+}: CbtSimulatorProps) {
+  const t = UI_TEXT[lang];
   const saved = useMemo(() => loadSavedState(), []);
 
   const [answers, setAnswers] = useState<Record<number, OptionKey>>(
     saved?.answers ?? {}
   );
-  const [marked, setMarked] = useState<Record<number, boolean>>(saved?.marked ?? {});
+  const [marked, setMarked] = useState<Record<number, boolean>>(
+    saved?.marked ?? {}
+  );
   const [visited, setVisited] = useState<Record<number, boolean>>(
     saved?.visited ?? { 1: true }
   );
   const [secondsLeft, setSecondsLeft] = useState<number>(
     saved?.secondsLeft ?? TOTAL_SECONDS
   );
-  const [currentIdx, setCurrentIdx] = useState<number>(saved?.currentIdx ?? 0);
-  const [submitted, setSubmitted] = useState<boolean>(saved?.submitted ?? false);
-  const [timerRunning, setTimerRunning] = useState<boolean>(!(saved?.submitted ?? false));
+  const [currentIdx, setCurrentIdx] = useState<number>(
+    Math.min(saved?.currentIdx ?? 0, Math.max(0, questions.length - 1))
+  );
+  const [submitted, setSubmitted] = useState<boolean>(
+    saved?.submitted ?? false
+  );
+  const [timerRunning, setTimerRunning] = useState<boolean>(
+    !(saved?.submitted ?? false)
+  );
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
-  const [reviewFilter, setReviewFilter] = useState<'ALL' | 'WRONG' | 'UNATTEMPTED'>('ALL');
+  const [reviewFilter, setReviewFilter] = useState<
+    'ALL' | 'WRONG' | 'UNATTEMPTED'
+  >('ALL');
 
   useEffect(() => {
     try {
@@ -98,15 +135,20 @@ export function CbtSimulator() {
     return () => window.clearInterval(id);
   }, [timerRunning, submitted]);
 
-  const currentQuestion = ALL_QUESTIONS[currentIdx];
-  const currentContext = currentQuestion.contextId
-    ? ALL_CONTEXTS[currentQuestion.contextId]
+  const safeIdx = Math.min(currentIdx, Math.max(0, questions.length - 1));
+  const currentQuestion = questions[safeIdx];
+  const localizedQ = getLocalizedQuestion(currentQuestion, lang);
+  const rawContext = currentQuestion.contextId
+    ? contexts[currentQuestion.contextId] ?? null
+    : null;
+  const currentContext = rawContext
+    ? getLocalizedContext(rawContext, lang)
     : null;
 
   const goToQuestion = (index: number) => {
-    const clamped = Math.max(0, Math.min(ALL_QUESTIONS.length - 1, index));
+    const clamped = Math.max(0, Math.min(questions.length - 1, index));
     setCurrentIdx(clamped);
-    const qId = ALL_QUESTIONS[clamped].id;
+    const qId = questions[clamped].id;
     setVisited((prev) => ({ ...prev, [qId]: true }));
   };
 
@@ -147,7 +189,7 @@ export function CbtSimulator() {
     let correct = 0;
     let wrong = 0;
 
-    for (const q of ALL_QUESTIONS) {
+    for (const q of questions) {
       const ans = answers[q.id];
       if (marked[q.id]) markedCount++;
       if (ans) {
@@ -156,13 +198,13 @@ export function CbtSimulator() {
         else wrong++;
       }
     }
-    const unattempted = ALL_QUESTIONS.length - answeredCount;
+    const unattempted = questions.length - answeredCount;
     const penalty = wrong / 3;
     const netScore = correct - penalty;
     const accuracy = answeredCount > 0 ? (correct / answeredCount) * 100 : 0;
 
     const sectionBreakdown = SECTIONS.map((sec) => {
-      const qs = ALL_QUESTIONS.filter((q) => q.sectionId === sec.id);
+      const qs = questions.filter((q) => q.sectionId === sec.id);
       let sCorrect = 0;
       let sWrong = 0;
       for (const q of qs) {
@@ -176,6 +218,7 @@ export function CbtSimulator() {
       const sNet = sCorrect - sWrong / 3;
       return {
         ...sec,
+        actualCount: qs.length,
         correct: sCorrect,
         wrong: sWrong,
         unattempted: qs.length - sAttempted,
@@ -196,11 +239,11 @@ export function CbtSimulator() {
       accuracy,
       sectionBreakdown,
     };
-  }, [answers, marked]);
+  }, [answers, marked, questions]);
 
   if (submitted) {
     const timeUsed = TOTAL_SECONDS - secondsLeft;
-    const reviewQuestions = ALL_QUESTIONS.filter((q) => {
+    const reviewQuestions = questions.filter((q) => {
       const a = answers[q.id];
       if (reviewFilter === 'WRONG') return Boolean(a) && a !== q.correctOption;
       if (reviewFilter === 'UNATTEMPTED') return !a;
@@ -214,65 +257,66 @@ export function CbtSimulator() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="text-xs font-semibold text-blue-700">
-                CEN No. 08/2026 · Official +1 / −1/3 Evaluation Report
+                {t.scorecardKicker}
               </div>
               <h1 className="text-2xl font-bold text-slate-900 mt-1">
-                CBT Mock Examination Scorecard
+                {t.scorecardTitle}
               </h1>
             </div>
-            <button
-              type="button"
-              onClick={handleResetExam}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Retake 120-Min CBT
-            </button>
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <LanguageToggle lang={lang} onChange={onChangeLang} compact />
+              <button
+                type="button"
+                onClick={handleResetExam}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                {t.retakeCbt}
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 pt-4 border-t border-slate-200">
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-              <div className="text-xs text-slate-500">Net CBT Score</div>
+              <div className="text-xs text-slate-500">{t.netCbtScore}</div>
               <div className="text-2xl font-bold font-mono tabular-nums text-blue-800 mt-1">
                 {stats.netScore.toFixed(2)}
               </div>
-              <div className="text-xs text-slate-500 mt-0.5">out of 100.00</div>
+              <div className="text-xs text-slate-500 mt-0.5">{t.outOf100}</div>
             </div>
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-              <div className="text-xs text-slate-500">Correct (+1)</div>
+              <div className="text-xs text-slate-500">{t.correctPlus}</div>
               <div className="text-2xl font-bold font-mono tabular-nums text-emerald-700 mt-1">
                 {stats.correct}
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
-                +{stats.correct.toFixed(2)} marks
+                +{stats.correct.toFixed(2)} {t.marksGainLabel}
               </div>
             </div>
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-              <div className="text-xs text-slate-500">Wrong (−1/3)</div>
+              <div className="text-xs text-slate-500">{t.wrongMinus}</div>
               <div className="text-2xl font-bold font-mono tabular-nums text-rose-700 mt-1">
                 {stats.wrong}
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
-                −{stats.penalty.toFixed(2)} penalty
+                −{stats.penalty.toFixed(2)} {t.penaltyLabel}
               </div>
             </div>
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-              <div className="text-xs text-slate-500">Accuracy</div>
+              <div className="text-xs text-slate-500">{t.accuracy}</div>
               <div className="text-2xl font-bold font-mono tabular-nums text-slate-900 mt-1">
                 {stats.accuracy.toFixed(1)}%
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
-                {stats.answeredCount} / 100 attempted
+                {t.attemptedOf100(stats.answeredCount)}
               </div>
             </div>
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-              <div className="text-xs text-slate-500">Time Taken</div>
+              <div className="text-xs text-slate-500">{t.timeTaken}</div>
               <div className="text-2xl font-bold font-mono tabular-nums text-slate-900 mt-1">
                 {formatClock(timeUsed)}
               </div>
-              <div className="text-xs text-slate-500 mt-0.5">
-                of 02:00:00 limit
-              </div>
+              <div className="text-xs text-slate-500 mt-0.5">{t.ofLimit}</div>
             </div>
           </div>
 
@@ -282,22 +326,23 @@ export function CbtSimulator() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700">
-                    <th className="px-4 py-3">Section</th>
-                    <th className="px-4 py-3 text-right">Attempted</th>
-                    <th className="px-4 py-3 text-right">Correct</th>
-                    <th className="px-4 py-3 text-right">Wrong</th>
-                    <th className="px-4 py-3 text-right">Accuracy</th>
-                    <th className="px-4 py-3 text-right">Net Score</th>
+                    <th className="px-4 py-3">{t.colSection}</th>
+                    <th className="px-4 py-3 text-right">{t.colAttempted}</th>
+                    <th className="px-4 py-3 text-right">{t.colCorrect}</th>
+                    <th className="px-4 py-3 text-right">{t.colWrong}</th>
+                    <th className="px-4 py-3 text-right">{t.colAccuracy}</th>
+                    <th className="px-4 py-3 text-right">{t.colNetScore}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {stats.sectionBreakdown.map((sb) => (
                     <tr key={sb.id} className="hover:bg-slate-50/70">
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        {sb.code}: {sb.title}
+                        {SECTION_TEXT[sb.id].code[lang]}:{' '}
+                        {SECTION_TEXT[sb.id].title[lang]}
                       </td>
                       <td className="px-4 py-3 text-right font-mono tabular-nums text-slate-700">
-                        {sb.attempted} / {sb.count}
+                        {sb.attempted} / {sb.actualCount}
                       </td>
                       <td className="px-4 py-3 text-right font-mono tabular-nums text-emerald-700 font-medium">
                         {sb.correct}
@@ -323,14 +368,17 @@ export function CbtSimulator() {
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <h2 className="text-lg font-bold text-slate-900">
-              Response Review & Worked Solutions
+              {t.responseReviewTitle}
             </h2>
             <div className="flex items-center gap-1 p-1 bg-slate-200/70 rounded-lg">
               {(
                 [
-                  { id: 'ALL', label: `All (${ALL_QUESTIONS.length})` },
-                  { id: 'WRONG', label: `Incorrect (${stats.wrong})` },
-                  { id: 'UNATTEMPTED', label: `Skipped (${stats.unattempted})` },
+                  { id: 'ALL', label: `${t.filterAll} (${questions.length})` },
+                  { id: 'WRONG', label: `${t.filterIncorrect} (${stats.wrong})` },
+                  {
+                    id: 'UNATTEMPTED',
+                    label: `${t.filterSkipped} (${stats.unattempted})`,
+                  },
                 ] as const
               ).map((tab) => (
                 <button
@@ -353,6 +401,7 @@ export function CbtSimulator() {
             {reviewQuestions.map((q) => {
               const userAns = answers[q.id];
               const isCorrect = userAns === q.correctOption;
+              const loc = getLocalizedQuestion(q, lang);
               return (
                 <div
                   key={q.id}
@@ -360,39 +409,50 @@ export function CbtSimulator() {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                     <div className="text-sm font-semibold text-slate-900">
-                      <span className="font-mono text-blue-800 mr-2">Q{q.id}</span>
-                      {q.topic}
+                      <span className="font-mono text-blue-800 mr-2">
+                        Q{q.id}
+                      </span>
+                      {localizeTopic(q.topic, lang)}
                       <span className="text-xs font-normal text-slate-500 ml-2">
-                        · {q.difficulty}
+                        · {localizeDifficulty(q.difficulty, lang)}
                       </span>
                     </div>
                     <div className="text-xs font-semibold inline-flex items-center gap-1.5">
                       {!userAns ? (
-                        <span className="text-slate-500">Unattempted (0.00)</span>
+                        <span className="text-slate-500">
+                          {t.unattemptedTag}
+                        </span>
                       ) : isCorrect ? (
                         <span className="text-emerald-700 inline-flex items-center gap-1">
                           <CheckCircle2 className="w-4 h-4" />
-                          Correct (+1.00)
+                          {t.correctTag}
                         </span>
                       ) : (
                         <span className="text-rose-700 inline-flex items-center gap-1">
                           <XCircle className="w-4 h-4" />
-                          Wrong (−0.33) · You picked {userAns}
+                          {t.wrongTag(userAns)}
                         </span>
                       )}
                     </div>
                   </div>
-                  <p className="text-sm font-medium text-slate-800">{q.question}</p>
+                  <p className="text-sm font-medium text-slate-800 leading-relaxed">
+                    {loc.question}
+                  </p>
                   <div className="text-xs text-emerald-800 font-semibold">
-                    Correct Answer: {q.correctOption}. {q.options[q.correctOption]}
+                    {t.correctAnswer}: {q.correctOption}.{' '}
+                    {loc.options[q.correctOption]}
                   </div>
                   <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    <span className="font-semibold text-slate-800">Explanation: </span>
-                    {q.explanation}
+                    <span className="font-semibold text-slate-800">
+                      {t.explanation}:{' '}
+                    </span>
+                    {loc.explanation}
                   </p>
                   <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    <span className="font-semibold text-slate-800">Shortcut: </span>
-                    {q.shortcut}
+                    <span className="font-semibold text-slate-800">
+                      {t.shortcut}:{' '}
+                    </span>
+                    {loc.shortcut}
                   </p>
                 </div>
               );
@@ -405,32 +465,41 @@ export function CbtSimulator() {
 
   return (
     <div className="space-y-5">
-      {/* CBT Exam Status Toolbar */}
+      {/* CBT Exam Screen Header with Built-In English / हिंदी Language Toggle */}
       <div className="bg-white border border-slate-200 rounded-xl px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
         {/* Section Quick-Jump Bar */}
         <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg overflow-x-auto">
           {SECTIONS.map((sec) => {
             const isCurrentSec = currentQuestion.sectionId === sec.id;
+            const firstIdx = questions.findIndex(
+              (q) => q.sectionId === sec.id
+            );
             return (
               <button
                 key={sec.id}
                 type="button"
-                onClick={() => goToQuestion(sec.questionRange[0] - 1)}
+                onClick={() => firstIdx >= 0 && goToQuestion(firstIdx)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   isCurrentSec
                     ? 'bg-blue-700 text-white'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {sec.code}: {sec.shortTitle}
+                {SECTION_TEXT[sec.id].code[lang]}:{' '}
+                {SECTION_TEXT[sec.id].shortTitle[lang]}
               </button>
             );
           })}
         </div>
 
-        {/* Live Timer & Submit */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
+        {/* Live Bilingual Toggle, Timer & Submit */}
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <LanguageToggle lang={lang} onChange={onChangeLang} compact />
+
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg"
+            title={t.timeLeft}
+          >
             <Clock
               className={`w-4 h-4 ${
                 secondsLeft < 600 ? 'text-rose-600' : 'text-blue-700'
@@ -452,11 +521,11 @@ export function CbtSimulator() {
           >
             {timerRunning ? (
               <>
-                <Pause className="w-3.5 h-3.5" /> Pause
+                <Pause className="w-3.5 h-3.5" /> {t.pause}
               </>
             ) : (
               <>
-                <Play className="w-3.5 h-3.5" /> Resume
+                <Play className="w-3.5 h-3.5" /> {t.resume}
               </>
             )}
           </button>
@@ -467,7 +536,7 @@ export function CbtSimulator() {
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 rounded-lg hover:bg-emerald-800 whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
-            Submit Test
+            {t.submitTest}
           </button>
         </div>
       </div>
@@ -480,27 +549,27 @@ export function CbtSimulator() {
           <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-200">
             <div className="flex items-baseline gap-2">
               <span className="text-base font-bold font-mono tabular-nums text-blue-800">
-                Question {currentQuestion.id} of 100
+                {t.questionOf(currentQuestion.id, questions.length)}
               </span>
               <span className="text-slate-300">·</span>
               <span className="text-sm font-medium text-slate-700">
-                {currentQuestion.topic}
+                {localizeTopic(currentQuestion.topic, lang)}
               </span>
             </div>
             <div className="text-xs text-slate-500 flex items-center gap-2">
-              <span>Marks: +1 / −0.33</span>
+              <span>{t.marksMeta}</span>
               <span>·</span>
-              <span>{currentQuestion.difficulty}</span>
+              <span>{localizeDifficulty(currentQuestion.difficulty, lang)}</span>
               <span>·</span>
-              <span>{currentQuestion.label}</span>
+              <span>{localizeLabel(currentQuestion.label, lang)}</span>
             </div>
           </div>
 
           {/* Shared Context (DI table/chart or RC passage) */}
-          {currentContext && (
+          {rawContext && currentContext && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 sm:p-5 space-y-4">
               <div className="text-xs font-semibold text-slate-800">
-                Directions ({currentContext.rangeLabel}): {currentContext.title}
+                {t.directions} ({rawContext.rangeLabel}): {currentContext.title}
               </div>
               {currentContext.introText && (
                 <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
@@ -514,27 +583,31 @@ export function CbtSimulator() {
                   ))}
                 </div>
               )}
-              {currentContext.table && <DataTable table={currentContext.table} compact />}
-              {currentContext.chart && <DataChart chart={currentContext.chart} />}
+              {currentContext.table && (
+                <DataTable table={currentContext.table} lang={lang} compact />
+              )}
+              {currentContext.chart && (
+                <DataChart chart={currentContext.chart} lang={lang} />
+              )}
             </div>
           )}
 
           {/* Inline DI Table / Chart */}
-          {currentQuestion.inlineTable && (
-            <DataTable table={currentQuestion.inlineTable} compact />
+          {localizedQ.inlineTable && (
+            <DataTable table={localizedQ.inlineTable} lang={lang} compact />
           )}
-          {currentQuestion.inlineChart && (
-            <DataChart chart={currentQuestion.inlineChart} />
+          {localizedQ.inlineChart && (
+            <DataChart chart={localizedQ.inlineChart} lang={lang} />
           )}
 
           {/* Question Prompt */}
           <div className="space-y-3">
             <p className="text-base font-medium text-slate-900 leading-relaxed">
-              {currentQuestion.question}
+              {localizedQ.question}
             </p>
-            {currentQuestion.statements && currentQuestion.statements.length > 0 && (
+            {localizedQ.statements && localizedQ.statements.length > 0 && (
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-1.5 text-sm text-slate-800">
-                {currentQuestion.statements.map((st, idx) => (
+                {localizedQ.statements.map((st, idx) => (
                   <p key={idx}>{st}</p>
                 ))}
               </div>
@@ -566,7 +639,7 @@ export function CbtSimulator() {
                     {key}
                   </span>
                   <span className="text-sm sm:text-[15px] leading-snug">
-                    {currentQuestion.options[key]}
+                    {localizedQ.options[key]}
                   </span>
                 </button>
               );
@@ -586,7 +659,9 @@ export function CbtSimulator() {
                 }`}
               >
                 <Bookmark className="w-3.5 h-3.5" />
-                {marked[currentQuestion.id] ? 'Marked for Review' : 'Mark for Review'}
+                {marked[currentQuestion.id]
+                  ? t.markedForReview
+                  : t.markForReview}
               </button>
               <button
                 type="button"
@@ -594,36 +669,36 @@ export function CbtSimulator() {
                 disabled={!answers[currentQuestion.id]}
                 className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap shrink-0 cursor-pointer"
               >
-                Clear Response
+                {t.clearResponse}
               </button>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => goToQuestion(currentIdx - 1)}
-                disabled={currentIdx === 0}
+                onClick={() => goToQuestion(safeIdx - 1)}
+                disabled={safeIdx === 0}
                 className="inline-flex items-center gap-1 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap shrink-0 cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
-                Previous
+                {t.previous}
               </button>
               <button
                 type="button"
                 onClick={() =>
-                  currentIdx < ALL_QUESTIONS.length - 1
-                    ? goToQuestion(currentIdx + 1)
+                  safeIdx < questions.length - 1
+                    ? goToQuestion(safeIdx + 1)
                     : setShowSubmitConfirm(true)
                 }
                 className="inline-flex items-center gap-1 px-4 py-2 text-xs font-semibold text-white bg-blue-700 rounded-lg hover:bg-blue-800 whitespace-nowrap shrink-0 cursor-pointer"
               >
-                {currentIdx < ALL_QUESTIONS.length - 1 ? (
+                {safeIdx < questions.length - 1 ? (
                   <>
-                    Save & Next
+                    {t.saveAndNext}
                     <ChevronRight className="w-4 h-4" />
                   </>
                 ) : (
-                  'Finish & Review'
+                  t.finishAndReview
                 )}
               </button>
             </div>
@@ -633,9 +708,11 @@ export function CbtSimulator() {
         {/* Right Zone: 1–100 Question Palette & Live Progress */}
         <aside className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-5 space-y-5">
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <h2 className="text-sm font-bold text-slate-900">Question Palette</h2>
+            <h2 className="text-sm font-bold text-slate-900">
+              {t.questionPalette}
+            </h2>
             <span className="text-xs font-mono tabular-nums text-slate-500">
-              {stats.answeredCount} / 100 Answered
+              {t.answeredOf(stats.answeredCount, questions.length)}
             </span>
           </div>
 
@@ -645,32 +722,40 @@ export function CbtSimulator() {
               <span className="w-5 h-5 rounded-md bg-emerald-600 text-white font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
                 A
               </span>
-              <span>Answered ({stats.answeredCount})</span>
+              <span>
+                {t.legendAnswered} ({stats.answeredCount})
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-5 h-5 rounded-md bg-amber-500 text-white font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
                 R
               </span>
-              <span>Review ({stats.markedCount})</span>
+              <span>
+                {t.legendReview} ({stats.markedCount})
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-5 h-5 rounded-md bg-slate-100 border border-slate-300 text-slate-600 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
                 N
               </span>
-              <span>Not Answered ({stats.unattempted})</span>
+              <span>
+                {t.legendNotAnswered} ({stats.unattempted})
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-5 h-5 rounded-md border-2 border-blue-700 bg-blue-50 text-blue-800 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
                 C
               </span>
-              <span>Current (Q{currentQuestion.id})</span>
+              <span>
+                {t.legendCurrent} (Q{currentQuestion.id})
+              </span>
             </div>
           </div>
 
           {/* 100-button Compact Grid */}
           <div className="grid grid-cols-10 gap-1.5 max-h-[380px] overflow-y-auto pr-1">
-            {ALL_QUESTIONS.map((q, idx) => {
-              const isCurrent = idx === currentIdx;
+            {questions.map((q, idx) => {
+              const isCurrent = idx === safeIdx;
               const isAnswered = Boolean(answers[q.id]);
               const isMarked = Boolean(marked[q.id]);
               const isVisited = Boolean(visited[q.id]);
@@ -707,14 +792,14 @@ export function CbtSimulator() {
               onClick={handleResetExam}
               className="text-xs font-medium text-slate-500 hover:text-rose-700 transition-colors cursor-pointer"
             >
-              Reset Attempt
+              {t.resetAttempt}
             </button>
             <button
               type="button"
               onClick={() => setShowSubmitConfirm(true)}
               className="px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 cursor-pointer"
             >
-              Submit Examination
+              {t.submitExamination}
             </button>
           </div>
         </aside>
@@ -728,30 +813,27 @@ export function CbtSimulator() {
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-slate-900">
-                  Submit RRB Station Master CBT Mock?
+                  {t.submitModalTitle}
                 </h3>
-                <p className="text-sm text-slate-600">
-                  Your score will be evaluated immediately using +1 for correct answers and −1/3
-                  negative marking for incorrect responses.
-                </p>
+                <p className="text-sm text-slate-600">{t.submitModalDesc}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3.5 text-center">
               <div>
-                <div className="text-xs text-slate-500">Answered</div>
+                <div className="text-xs text-slate-500">{t.legendAnswered}</div>
                 <div className="text-lg font-bold font-mono tabular-nums text-emerald-700">
                   {stats.answeredCount}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500">Skipped</div>
+                <div className="text-xs text-slate-500">{t.skipped}</div>
                 <div className="text-lg font-bold font-mono tabular-nums text-slate-800">
                   {stats.unattempted}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500">For Review</div>
+                <div className="text-xs text-slate-500">{t.forReview}</div>
                 <div className="text-lg font-bold font-mono tabular-nums text-amber-700">
                   {stats.markedCount}
                 </div>
@@ -764,7 +846,7 @@ export function CbtSimulator() {
                 onClick={() => setShowSubmitConfirm(false)}
                 className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 cursor-pointer"
               >
-                Continue Test
+                {t.continueTest}
               </button>
               <button
                 type="button"
@@ -775,7 +857,7 @@ export function CbtSimulator() {
                 }}
                 className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 rounded-lg hover:bg-emerald-800 cursor-pointer"
               >
-                Confirm Submit
+                {t.confirmSubmit}
               </button>
             </div>
           </div>

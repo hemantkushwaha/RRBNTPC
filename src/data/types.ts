@@ -13,10 +13,17 @@ export interface DataTableBlock {
   headers: string[];
   rows: (string | number)[][];
   note?: string;
+  hi?: {
+    title: string;
+    headers: string[];
+    rows: (string | number)[][];
+    note?: string;
+  };
 }
 
 export interface ChartBarSeries {
   name: string;
+  nameHi?: string;
   color: string;
   values: number[];
 }
@@ -24,18 +31,25 @@ export interface ChartBarSeries {
 export interface ChartVisualSpec {
   type: 'grouped-bar' | 'pie' | 'line' | 'venn' | 'scatter' | 'histogram';
   title: string;
+  titleHi?: string;
   subtitle?: string;
   labels?: string[];
+  labelsHi?: string[];
   series?: ChartBarSeries[];
-  pieSlices?: { label: string; value: number; color: string }[];
+  pieSlices?: { label: string; labelHi?: string; value: number; color: string }[];
   scatterPoints?: { x: number; y: number }[];
   xLabel?: string;
+  xLabelHi?: string;
   yLabel?: string;
+  yLabelHi?: string;
   vennData?: {
     total: number;
     setA: string;
+    setAHi?: string;
     setB: string;
+    setBHi?: string;
     setC: string;
+    setCHi?: string;
     onlyA: number;
     onlyB: number;
     onlyC: number;
@@ -56,6 +70,33 @@ export interface SharedContextBlock {
   passageParagraphs?: string[];
   table?: DataTableBlock;
   chart?: ChartVisualSpec;
+  hi?: {
+    title: string;
+    theme?: string;
+    introText?: string;
+    passageParagraphs?: string[];
+    table?: {
+      title: string;
+      headers: string[];
+      rows: (string | number)[][];
+      note?: string;
+    };
+  };
+}
+
+export interface BilingualQuestionContent {
+  question: string;
+  statements?: string[];
+  options: Record<OptionKey, string>;
+  explanation: string;
+  shortcut: string;
+  inlineTable?: {
+    title: string;
+    headers: string[];
+    rows: (string | number)[][];
+    note?: string;
+  };
+  inlineChartTitle?: string;
 }
 
 export interface ExamQuestion {
@@ -74,6 +115,7 @@ export interface ExamQuestion {
   correctOption: OptionKey;
   explanation: string;
   shortcut: string;
+  hi?: BilingualQuestionContent;
 }
 
 export interface SectionMeta {

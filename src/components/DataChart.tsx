@@ -1,11 +1,17 @@
 import { ChartVisualSpec } from '../data/types';
+import { Language } from '../i18n/ui';
 
 interface DataChartProps {
   chart: ChartVisualSpec;
+  lang: Language;
 }
 
-export function DataChart({ chart }: DataChartProps) {
-  if (chart.type === 'grouped-bar' && chart.labels && chart.series) {
+export function DataChart({ chart, lang }: DataChartProps) {
+  const title = lang === 'hi' && chart.titleHi ? chart.titleHi : chart.title;
+  const labels =
+    lang === 'hi' && chart.labelsHi ? chart.labelsHi : chart.labels;
+
+  if (chart.type === 'grouped-bar' && labels && chart.series) {
     const maxVal = Math.max(...chart.series.flatMap((s) => s.values), 10);
     const yMax = Math.ceil(maxVal / 20) * 20;
     const width = 460;
@@ -13,13 +19,13 @@ export function DataChart({ chart }: DataChartProps) {
     const pad = { top: 20, right: 20, bottom: 36, left: 42 };
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
-    const groupW = plotW / chart.labels.length;
+    const groupW = plotW / labels.length;
     const barW = Math.min(24, (groupW - 14) / chart.series.length);
 
     return (
       <div className="border border-slate-200 rounded-lg bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <span className="text-xs font-semibold text-slate-800">{chart.title}</span>
+          <span className="text-xs font-semibold text-slate-800">{title}</span>
           <div className="flex items-center gap-4 text-xs text-slate-600">
             {chart.series.map((s) => (
               <span key={s.name} className="inline-flex items-center gap-1.5">
@@ -27,7 +33,7 @@ export function DataChart({ chart }: DataChartProps) {
                   className="inline-block w-2.5 h-2.5 rounded-xs"
                   style={{ backgroundColor: s.color }}
                 />
-                {s.name}
+                {lang === 'hi' && s.nameHi ? s.nameHi : s.name}
               </span>
             ))}
           </div>
@@ -57,9 +63,10 @@ export function DataChart({ chart }: DataChartProps) {
               </g>
             );
           })}
-          {chart.labels.map((label, i) => {
+          {labels.map((label, i) => {
             const centerX = pad.left + i * groupW + groupW / 2;
-            const totalBarsW = chart.series!.length * barW + (chart.series!.length - 1) * 4;
+            const totalBarsW =
+              chart.series!.length * barW + (chart.series!.length - 1) * 4;
             const startX = centerX - totalBarsW / 2;
             return (
               <g key={label}>
@@ -114,11 +121,12 @@ export function DataChart({ chart }: DataChartProps) {
 
     return (
       <div className="border border-slate-200 rounded-lg bg-white p-4">
-        <div className="text-xs font-semibold text-slate-800 mb-3">{chart.title}</div>
+        <div className="text-xs font-semibold text-slate-800 mb-3">{title}</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
           <svg viewBox="0 0 210 210" className="w-44 h-44 mx-auto">
             {chart.pieSlices.map((slice) => {
-              const startAngle = (cumulative / total) * Math.PI * 2 - Math.PI / 2;
+              const startAngle =
+                (cumulative / total) * Math.PI * 2 - Math.PI / 2;
               cumulative += slice.value;
               const endAngle = (cumulative / total) * Math.PI * 2 - Math.PI / 2;
               const largeArc = slice.value / total > 0.5 ? 1 : 0;
@@ -132,7 +140,12 @@ export function DataChart({ chart }: DataChartProps) {
               const pathData = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
               return (
                 <g key={slice.label}>
-                  <path d={pathData} fill={slice.color} stroke="#FFFFFF" strokeWidth="1.5" />
+                  <path
+                    d={pathData}
+                    fill={slice.color}
+                    stroke="#FFFFFF"
+                    strokeWidth="1.5"
+                  />
                   <text
                     x={lx}
                     y={ly + 4}
@@ -156,7 +169,11 @@ export function DataChart({ chart }: DataChartProps) {
                     className="w-2.5 h-2.5 rounded-xs shrink-0"
                     style={{ backgroundColor: slice.color }}
                   />
-                  <span>{slice.label}</span>
+                  <span>
+                    {lang === 'hi' && slice.labelHi
+                      ? slice.labelHi
+                      : slice.label}
+                  </span>
                 </span>
                 <span className="font-mono tabular-nums font-semibold text-slate-900">
                   {slice.value}%
@@ -169,7 +186,7 @@ export function DataChart({ chart }: DataChartProps) {
     );
   }
 
-  if (chart.type === 'line' && chart.labels && chart.series && chart.series[0]) {
+  if (chart.type === 'line' && labels && chart.series && chart.series[0]) {
     const s = chart.series[0];
     const minVal = 75;
     const maxVal = 95;
@@ -182,14 +199,14 @@ export function DataChart({ chart }: DataChartProps) {
     const points = s.values.map((v, idx) => {
       const x = pad.left + (idx / (s.values.length - 1)) * plotW;
       const y = pad.top + ((maxVal - v) / (maxVal - minVal)) * plotH;
-      return { x, y, v, label: chart.labels![idx] };
+      return { x, y, v, label: labels[idx] };
     });
 
     const polyline = points.map((p) => `${p.x},${p.y}`).join(' ');
 
     return (
       <div className="border border-slate-200 rounded-lg bg-white p-4">
-        <div className="text-xs font-semibold text-slate-800 mb-3">{chart.title}</div>
+        <div className="text-xs font-semibold text-slate-800 mb-3">{title}</div>
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto max-h-56">
           {[75, 80, 85, 90, 95].map((tick) => {
             const y = pad.top + ((maxVal - tick) / (maxVal - minVal)) * plotH;
@@ -222,7 +239,14 @@ export function DataChart({ chart }: DataChartProps) {
           />
           {points.map((p) => (
             <g key={p.label}>
-              <circle cx={p.x} cy={p.y} r="4" fill="#FFFFFF" stroke={s.color} strokeWidth="2.5" />
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r="4"
+                fill="#FFFFFF"
+                stroke={s.color}
+                strokeWidth="2.5"
+              />
               <text
                 x={p.x}
                 y={p.y - 9}
@@ -248,49 +272,120 @@ export function DataChart({ chart }: DataChartProps) {
 
   if (chart.type === 'venn' && chart.vennData) {
     const d = chart.vennData;
+    const setA = lang === 'hi' && d.setAHi ? d.setAHi : d.setA;
+    const setB = lang === 'hi' && d.setBHi ? d.setBHi : d.setB;
+    const setC = lang === 'hi' && d.setCHi ? d.setCHi : d.setC;
     return (
       <div className="border border-slate-200 rounded-lg bg-white p-4">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-xs font-semibold text-slate-800">{chart.title}</span>
+          <span className="text-xs font-semibold text-slate-800">{title}</span>
           <span className="text-xs text-slate-500 font-mono tabular-nums">
-            N = {d.total} (Outside = 0)
+            {lang === 'hi' ? `कुल = ${d.total} (बाहर = 0)` : `N = ${d.total} (Outside = 0)`}
           </span>
         </div>
         <svg viewBox="0 0 360 245" className="w-full max-w-sm mx-auto h-auto">
-          <circle cx="145" cy="100" r="68" fill="#1D4ED8" fillOpacity="0.10" stroke="#1D4ED8" strokeWidth="1.5" />
-          <circle cx="215" cy="100" r="68" fill="#0284C7" fillOpacity="0.10" stroke="#0284C7" strokeWidth="1.5" />
-          <circle cx="180" cy="158" r="68" fill="#0D9488" fillOpacity="0.10" stroke="#0D9488" strokeWidth="1.5" />
+          <circle
+            cx="145"
+            cy="100"
+            r="68"
+            fill="#1D4ED8"
+            fillOpacity="0.10"
+            stroke="#1D4ED8"
+            strokeWidth="1.5"
+          />
+          <circle
+            cx="215"
+            cy="100"
+            r="68"
+            fill="#0284C7"
+            fillOpacity="0.10"
+            stroke="#0284C7"
+            strokeWidth="1.5"
+          />
+          <circle
+            cx="180"
+            cy="158"
+            r="68"
+            fill="#0D9488"
+            fillOpacity="0.10"
+            stroke="#0D9488"
+            strokeWidth="1.5"
+          />
 
           <text x="86" y="30" className="fill-blue-800 text-[11px] font-semibold">
-            {d.setA}
+            {setA}
           </text>
-          <text x="274" y="30" textAnchor="end" className="fill-sky-800 text-[11px] font-semibold">
-            {d.setB}
+          <text
+            x="274"
+            y="30"
+            textAnchor="end"
+            className="fill-sky-800 text-[11px] font-semibold"
+          >
+            {setB}
           </text>
-          <text x="180" y="238" textAnchor="middle" className="fill-teal-800 text-[11px] font-semibold">
-            {d.setC}
+          <text
+            x="180"
+            y="238"
+            textAnchor="middle"
+            className="fill-teal-800 text-[11px] font-semibold"
+          >
+            {setC}
           </text>
 
-          {/* Regions shown as '?' placeholders so the student solves them during CBT */}
-          <text x="115" y="92" textAnchor="middle" className="fill-slate-700 text-[11px] font-mono">
-            Only A
+          <text
+            x="115"
+            y="92"
+            textAnchor="middle"
+            className="fill-slate-700 text-[11px]"
+          >
+            {lang === 'hi' ? 'केवल A' : 'Only A'}
           </text>
-          <text x="245" y="92" textAnchor="middle" className="fill-slate-700 text-[11px] font-mono">
-            Only B
+          <text
+            x="245"
+            y="92"
+            textAnchor="middle"
+            className="fill-slate-700 text-[11px]"
+          >
+            {lang === 'hi' ? 'केवल B' : 'Only B'}
           </text>
-          <text x="180" y="192" textAnchor="middle" className="fill-slate-700 text-[11px] font-mono">
-            Only C
+          <text
+            x="180"
+            y="192"
+            textAnchor="middle"
+            className="fill-slate-700 text-[11px]"
+          >
+            {lang === 'hi' ? 'केवल C' : 'Only C'}
           </text>
-          <text x="180" y="78" textAnchor="middle" className="fill-slate-600 text-[10px] font-mono">
+          <text
+            x="180"
+            y="78"
+            textAnchor="middle"
+            className="fill-slate-600 text-[10px] font-mono"
+          >
             A∩B
           </text>
-          <text x="143" y="142" textAnchor="middle" className="fill-slate-600 text-[10px] font-mono">
+          <text
+            x="143"
+            y="142"
+            textAnchor="middle"
+            className="fill-slate-600 text-[10px] font-mono"
+          >
             A∩C
           </text>
-          <text x="217" y="142" textAnchor="middle" className="fill-slate-600 text-[10px] font-mono">
+          <text
+            x="217"
+            y="142"
+            textAnchor="middle"
+            className="fill-slate-600 text-[10px] font-mono"
+          >
             B∩C
           </text>
-          <text x="180" y="122" textAnchor="middle" className="fill-slate-900 text-[12px] font-mono font-semibold">
+          <text
+            x="180"
+            y="122"
+            textAnchor="middle"
+            className="fill-slate-900 text-[12px] font-mono font-semibold"
+          >
             x
           </text>
         </svg>
@@ -309,14 +404,26 @@ export function DataChart({ chart }: DataChartProps) {
 
     return (
       <div className="border border-slate-200 rounded-lg bg-white p-4">
-        <div className="text-xs font-semibold text-slate-800 mb-3">{chart.title}</div>
+        <div className="text-xs font-semibold text-slate-800 mb-3">{title}</div>
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto max-h-56">
           {[0, 100, 200, 300].map((yt) => {
             const y = pad.top + ((yMax - yt) / yMax) * plotH;
             return (
               <g key={yt}>
-                <line x1={pad.left} y1={y} x2={width - pad.right} y2={y} stroke="#E2E8F0" strokeWidth="1" />
-                <text x={pad.left - 8} y={y + 4} textAnchor="end" className="fill-slate-500 text-[10px] font-mono">
+                <line
+                  x1={pad.left}
+                  y1={y}
+                  x2={width - pad.right}
+                  y2={y}
+                  stroke="#E2E8F0"
+                  strokeWidth="1"
+                />
+                <text
+                  x={pad.left - 8}
+                  y={y + 4}
+                  textAnchor="end"
+                  className="fill-slate-500 text-[10px] font-mono"
+                >
                   {yt}
                 </text>
               </g>
@@ -326,8 +433,20 @@ export function DataChart({ chart }: DataChartProps) {
             const x = pad.left + (xt / xMax) * plotW;
             return (
               <g key={xt}>
-                <line x1={x} y1={pad.top} x2={x} y2={pad.top + plotH} stroke="#F1F5F9" strokeWidth="1" />
-                <text x={x} y={height - 12} textAnchor="middle" className="fill-slate-600 text-[10px] font-mono">
+                <line
+                  x1={x}
+                  y1={pad.top}
+                  x2={x}
+                  y2={pad.top + plotH}
+                  stroke="#F1F5F9"
+                  strokeWidth="1"
+                />
+                <text
+                  x={x}
+                  y={height - 12}
+                  textAnchor="middle"
+                  className="fill-slate-600 text-[10px] font-mono"
+                >
                   {xt}
                 </text>
               </g>
@@ -339,7 +458,12 @@ export function DataChart({ chart }: DataChartProps) {
             return (
               <g key={`${pt.x}-${pt.y}`}>
                 <circle cx={x} cy={y} r="4.5" fill="#1D4ED8" />
-                <text x={x} y={y - 8} textAnchor="middle" className="fill-slate-700 text-[9px] font-mono">
+                <text
+                  x={x}
+                  y={y - 8}
+                  textAnchor="middle"
+                  className="fill-slate-700 text-[9px] font-mono"
+                >
                   ({pt.x},{pt.y})
                 </text>
               </g>
@@ -350,7 +474,7 @@ export function DataChart({ chart }: DataChartProps) {
     );
   }
 
-  if (chart.type === 'histogram' && chart.labels && chart.series && chart.series[0]) {
+  if (chart.type === 'histogram' && labels && chart.series && chart.series[0]) {
     const s = chart.series[0];
     const yMax = 24;
     const width = 460;
@@ -358,24 +482,36 @@ export function DataChart({ chart }: DataChartProps) {
     const pad = { top: 20, right: 20, bottom: 34, left: 40 };
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
-    const colW = plotW / chart.labels.length;
+    const colW = plotW / labels.length;
 
     return (
       <div className="border border-slate-200 rounded-lg bg-white p-4">
-        <div className="text-xs font-semibold text-slate-800 mb-3">{chart.title}</div>
+        <div className="text-xs font-semibold text-slate-800 mb-3">{title}</div>
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto max-h-56">
           {[0, 6, 12, 18, 24].map((yt) => {
             const y = pad.top + ((yMax - yt) / yMax) * plotH;
             return (
               <g key={yt}>
-                <line x1={pad.left} y1={y} x2={width - pad.right} y2={y} stroke="#E2E8F0" strokeWidth="1" />
-                <text x={pad.left - 8} y={y + 4} textAnchor="end" className="fill-slate-500 text-[10px] font-mono">
+                <line
+                  x1={pad.left}
+                  y1={y}
+                  x2={width - pad.right}
+                  y2={y}
+                  stroke="#E2E8F0"
+                  strokeWidth="1"
+                />
+                <text
+                  x={pad.left - 8}
+                  y={y + 4}
+                  textAnchor="end"
+                  className="fill-slate-500 text-[10px] font-mono"
+                >
                   {yt}
                 </text>
               </g>
             );
           })}
-          {chart.labels.map((label, idx) => {
+          {labels.map((label, idx) => {
             const v = s.values[idx];
             const bh = (v / yMax) * plotH;
             const x = pad.left + idx * colW;

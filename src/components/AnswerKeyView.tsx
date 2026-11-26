@@ -1,12 +1,25 @@
 import { useMemo, useState } from 'react';
-import { ALL_QUESTIONS, SCORING_EXAMPLES } from '../data/mockPaper';
-import { Difficulty, SECTIONS, SectionId } from '../data/types';
+import { getLocalizedQuestion, SCORING_EXAMPLES } from '../data/mockPaper';
+import { Difficulty, ExamQuestion, SECTIONS, SectionId } from '../data/types';
+import {
+  Language,
+  localizeDifficulty,
+  localizeLabel,
+  localizeTopic,
+  SECTION_TEXT,
+  UI_TEXT,
+} from '../i18n/ui';
 
-export function AnswerKeyView() {
+interface AnswerKeyViewProps {
+  lang: Language;
+  questions: ExamQuestion[];
+}
+
+export function AnswerKeyView({ lang, questions }: AnswerKeyViewProps) {
+  const t = UI_TEXT[lang];
   const [sectionFilter, setSectionFilter] = useState<'ALL' | SectionId>('ALL');
   const [diffFilter, setDiffFilter] = useState<'ALL' | Difficulty>('ALL');
 
-  // Interactive −1/3 Negative Marking Simulator sliders
   const [simCorrect, setSimCorrect] = useState(76);
   const [simWrong, setSimWrong] = useState(9);
 
@@ -19,28 +32,21 @@ export function AnswerKeyView() {
   const simAccuracy = simAttempted > 0 ? (simCorrect / simAttempted) * 100 : 0;
 
   const filteredKey = useMemo(() => {
-    return ALL_QUESTIONS.filter((q) => {
+    return questions.filter((q) => {
       if (sectionFilter !== 'ALL' && q.sectionId !== sectionFilter) return false;
       if (diffFilter !== 'ALL' && q.difficulty !== diffFilter) return false;
       return true;
     });
-  }, [sectionFilter, diffFilter]);
+  }, [questions, sectionFilter, diffFilter]);
 
   return (
     <div className="space-y-8">
       {/* Section 1: Interactive −1/3 Score Calculator & Strategy */}
       <section className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6">
         <div className="space-y-1.5">
-          <div className="text-xs font-semibold text-blue-700">
-            Official RRB CBT Marking Scheme (+1 Correct · −1/3 Wrong · 0 Unattempted)
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">
-            Answer Key, Negative Marking (−1/3) Analysis & 120-Minute Strategy
-          </h1>
-          <p className="text-sm text-slate-600 max-w-3xl">
-            Every three wrong answers erase one full mark earned from a correct response. Use the
-            interactive estimator below to test how accuracy impacts your net CEN 08/2026 score.
-          </p>
+          <div className="text-xs font-semibold text-blue-700">{t.akKicker}</div>
+          <h1 className="text-2xl font-bold text-slate-900">{t.akTitle}</h1>
+          <p className="text-sm text-slate-600 max-w-3xl">{t.akSubtitle}</p>
         </div>
 
         {/* Interactive Calculator */}
@@ -48,11 +54,14 @@ export function AnswerKeyView() {
           <div className="lg:col-span-7 space-y-5">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <label htmlFor="sim-correct" className="font-medium text-slate-800">
-                  Correct Answers (+1 mark each)
+                <label
+                  htmlFor="sim-correct"
+                  className="font-medium text-slate-800"
+                >
+                  {t.simCorrectLabel}
                 </label>
                 <span className="font-mono font-bold tabular-nums text-emerald-700">
-                  {simCorrect} questions
+                  {simCorrect} {t.questionsUnit}
                 </span>
               </div>
               <input
@@ -72,11 +81,14 @@ export function AnswerKeyView() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <label htmlFor="sim-wrong" className="font-medium text-slate-800">
-                  Wrong Answers (−0.333 mark each)
+                <label
+                  htmlFor="sim-wrong"
+                  className="font-medium text-slate-800"
+                >
+                  {t.simWrongLabel}
                 </label>
                 <span className="font-mono font-bold tabular-nums text-rose-700">
-                  {clampedWrong} questions (max {maxWrong})
+                  {clampedWrong} {t.questionsUnit} ({t.maxLabel} {maxWrong})
                 </span>
               </div>
               <input
@@ -93,27 +105,27 @@ export function AnswerKeyView() {
 
           <div className="lg:col-span-5 bg-slate-50 border border-slate-200 rounded-xl p-5 grid grid-cols-2 gap-4">
             <div>
-              <div className="text-xs text-slate-500">Projected Net Score</div>
+              <div className="text-xs text-slate-500">{t.projectedNetScore}</div>
               <div className="text-2xl font-bold font-mono tabular-nums text-blue-800 mt-0.5">
                 {simNet.toFixed(2)}
               </div>
-              <div className="text-xs text-slate-500">out of 100.00</div>
+              <div className="text-xs text-slate-500">{t.outOf100}</div>
             </div>
             <div>
-              <div className="text-xs text-slate-500">Negative Penalty</div>
+              <div className="text-xs text-slate-500">{t.negativePenalty}</div>
               <div className="text-2xl font-bold font-mono tabular-nums text-rose-700 mt-0.5">
                 −{simPenalty.toFixed(2)}
               </div>
-              <div className="text-xs text-slate-500">marks deducted</div>
+              <div className="text-xs text-slate-500">{t.marksDeducted}</div>
             </div>
             <div>
-              <div className="text-xs text-slate-500">Accuracy Rate</div>
+              <div className="text-xs text-slate-500">{t.accuracyRate}</div>
               <div className="text-lg font-bold font-mono tabular-nums text-slate-900 mt-0.5">
                 {simAccuracy.toFixed(1)}%
               </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500">Attempted / Skipped</div>
+              <div className="text-xs text-slate-500">{t.attemptedSkipped}</div>
               <div className="text-lg font-bold font-mono tabular-nums text-slate-900 mt-0.5">
                 {simAttempted} / {simSkipped}
               </div>
@@ -124,32 +136,43 @@ export function AnswerKeyView() {
 
       {/* Section 2: Worked Negative Marking Examples + 120-Min Strategy */}
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Worked Examples */}
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200">
             <h2 className="text-base font-bold text-slate-900">
-              Worked Negative Marking (−1/3) Scenarios
+              {t.workedScenariosTitle}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Comparing disciplined high-accuracy attempts against over-attempting with guesses.
+              {t.workedScenariosSub}
             </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700">
-                  <th className="px-4 py-2.5">Attempt Profile</th>
-                  <th className="px-3 py-2.5 text-right">C / W</th>
-                  <th className="px-3 py-2.5 text-right">Penalty</th>
-                  <th className="px-4 py-2.5 text-right">Final Score</th>
+                  <th className="px-4 py-2.5">
+                    {lang === 'hi' ? 'प्रयास प्रोफ़ाइल' : 'Attempt Profile'}
+                  </th>
+                  <th className="px-3 py-2.5 text-right">
+                    {lang === 'hi' ? 'सही / गलत' : 'C / W'}
+                  </th>
+                  <th className="px-3 py-2.5 text-right">
+                    {lang === 'hi' ? 'कटौती' : 'Penalty'}
+                  </th>
+                  <th className="px-4 py-2.5 text-right">
+                    {lang === 'hi' ? 'अंतिम स्कोर' : 'Final Score'}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
                 {SCORING_EXAMPLES.map((ex) => (
                   <tr key={ex.profile} className="hover:bg-slate-50/70">
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-slate-900">{ex.profile}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{ex.verdict}</div>
+                      <div className="font-semibold text-slate-900">
+                        {lang === 'hi' ? ex.profileHi : ex.profile}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        {lang === 'hi' ? ex.verdictHi : ex.verdict}
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums whitespace-nowrap text-slate-700">
                       {ex.correct} / {ex.wrong}
@@ -171,34 +194,41 @@ export function AnswerKeyView() {
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col">
           <div className="px-5 py-4 border-b border-slate-200">
             <h2 className="text-base font-bold text-slate-900">
-              120-Minute Time-Management & Target Allocation
+              {t.strategyTitle}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Recommended Pass-1 (85 min) + Pass-2 Review (25 min) + Final Verification (10 min).
-            </p>
+            <p className="text-xs text-slate-500 mt-0.5">{t.strategySub}</p>
           </div>
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700">
-                  <th className="px-4 py-2.5">Section</th>
-                  <th className="px-3 py-2.5 text-right">Qs</th>
-                  <th className="px-3 py-2.5 text-right">Time</th>
-                  <th className="px-3 py-2.5 text-right">Target Attempts</th>
-                  <th className="px-4 py-2.5 text-right">Target Score</th>
+                  <th className="px-4 py-2.5">{t.colSection}</th>
+                  <th className="px-3 py-2.5 text-right">
+                    {lang === 'hi' ? 'प्रश्न' : 'Qs'}
+                  </th>
+                  <th className="px-3 py-2.5 text-right">
+                    {lang === 'hi' ? 'समय' : 'Time'}
+                  </th>
+                  <th className="px-3 py-2.5 text-right">
+                    {lang === 'hi' ? 'लक्ष्य प्रयास' : 'Target Attempts'}
+                  </th>
+                  <th className="px-4 py-2.5 text-right">
+                    {lang === 'hi' ? 'लक्ष्य स्कोर' : 'Target Score'}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
                 {SECTIONS.map((sec) => (
                   <tr key={sec.id} className="hover:bg-slate-50/70">
                     <td className="px-4 py-3 font-medium text-slate-900">
-                      {sec.code}: {sec.shortTitle}
+                      {SECTION_TEXT[sec.id].code[lang]}:{' '}
+                      {SECTION_TEXT[sec.id].shortTitle[lang]}
                     </td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-700">
                       {sec.count}
                     </td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums font-semibold text-blue-800">
-                      {sec.recommendedMinutes} min
+                      {sec.recommendedMinutes} {lang === 'hi' ? 'मि.' : 'min'}
                     </td>
                     <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-700">
                       {sec.targetAttempts}
@@ -209,12 +239,18 @@ export function AnswerKeyView() {
                   </tr>
                 ))}
                 <tr className="bg-slate-50 font-bold text-slate-900">
-                  <td className="px-4 py-3">Total (Full Mock Paper)</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">100</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums text-blue-800">
-                    120 min
+                  <td className="px-4 py-3">
+                    {lang === 'hi' ? 'कुल (पूर्ण मॉक पेपर)' : 'Total (Full Mock Paper)'}
                   </td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">84–90</td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums">
+                    100
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums text-blue-800">
+                    120 {lang === 'hi' ? 'मि.' : 'min'}
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums">
+                    84–90
+                  </td>
                   <td className="px-4 py-3 text-right font-mono tabular-nums text-emerald-700">
                     77.5 – 85.5
                   </td>
@@ -223,7 +259,29 @@ export function AnswerKeyView() {
             </table>
           </div>
           <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-600 leading-relaxed">
-            Recommended attempt order: Start with <strong className="text-slate-900">Section 3 (Mental Reasoning, 20 min)</strong> to bank quick marks, move to <strong className="text-slate-900">Section 1A (35 min)</strong>, tackle <strong className="text-slate-900">Section 1B DI (40 min)</strong> with fresh focus, and finish with <strong className="text-slate-900">Section 2 Logical & RC (25 min)</strong>.
+            {lang === 'hi' ? (
+              <>
+                अनुशंसित क्रम: पहले <strong className="text-slate-900">खंड 3 (मानसिक तर्कशक्ति, 20 मि.)</strong> से तेज अंक सुरक्षित करें, फिर <strong className="text-slate-900">खंड 1A (35 मि.)</strong>, उसके बाद <strong className="text-slate-900">खंड 1B डेटा विश्लेषण (40 मि.)</strong> और अंत में <strong className="text-slate-900">खंड 2 तार्किक क्षमता व गद्यांश (25 मि.)</strong> हल करें।
+              </>
+            ) : (
+              <>
+                Recommended attempt order: Start with{' '}
+                <strong className="text-slate-900">
+                  Section 3 (Mental Reasoning, 20 min)
+                </strong>{' '}
+                to bank quick marks, move to{' '}
+                <strong className="text-slate-900">Section 1A (35 min)</strong>,
+                tackle{' '}
+                <strong className="text-slate-900">
+                  Section 1B DI (40 min)
+                </strong>{' '}
+                with fresh focus, and finish with{' '}
+                <strong className="text-slate-900">
+                  Section 2 Logical & RC (25 min)
+                </strong>
+                .
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -233,24 +291,27 @@ export function AnswerKeyView() {
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-base font-bold text-slate-900">
-              Complete 1–100 Master Answer Key
+              {t.masterKeyTitle}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Every answer verified against step-by-step calculations and logical deductions.
-            </p>
+            <p className="text-xs text-slate-500 mt-0.5">{t.masterKeySub}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <select
               aria-label="Filter Answer Key by Section"
               value={sectionFilter}
-              onChange={(e) => setSectionFilter(e.target.value as 'ALL' | SectionId)}
+              onChange={(e) =>
+                setSectionFilter(e.target.value as 'ALL' | SectionId)
+              }
               className="px-3 py-1.5 text-xs font-medium bg-slate-50 border border-slate-300 rounded-lg text-slate-800"
             >
-              <option value="ALL">All Sections (100)</option>
+              <option value="ALL">
+                {t.allSections} ({questions.length})
+              </option>
               {SECTIONS.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.code}: {s.shortTitle}
+                  {SECTION_TEXT[s.id].code[lang]}:{' '}
+                  {SECTION_TEXT[s.id].shortTitle[lang]}
                 </option>
               ))}
             </select>
@@ -258,13 +319,19 @@ export function AnswerKeyView() {
             <select
               aria-label="Filter Answer Key by Difficulty"
               value={diffFilter}
-              onChange={(e) => setDiffFilter(e.target.value as 'ALL' | Difficulty)}
+              onChange={(e) =>
+                setDiffFilter(e.target.value as 'ALL' | Difficulty)
+              }
               className="px-3 py-1.5 text-xs font-medium bg-slate-50 border border-slate-300 rounded-lg text-slate-800"
             >
-              <option value="ALL">All Difficulties</option>
-              <option value="Easy">Easy</option>
-              <option value="Moderate">Moderate</option>
-              <option value="Difficult">Difficult</option>
+              <option value="ALL">{t.allDifficulties}</option>
+              <option value="Easy">{localizeDifficulty('Easy', lang)}</option>
+              <option value="Moderate">
+                {localizeDifficulty('Moderate', lang)}
+              </option>
+              <option value="Difficult">
+                {localizeDifficulty('Difficult', lang)}
+              </option>
             </select>
           </div>
         </div>
@@ -273,17 +340,18 @@ export function AnswerKeyView() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700">
-                <th className="px-4 py-2.5 w-20">Q.No</th>
-                <th className="px-4 py-2.5 w-28">Section</th>
-                <th className="px-4 py-2.5">Topic</th>
-                <th className="px-4 py-2.5 w-28">Difficulty</th>
-                <th className="px-4 py-2.5 w-52">Classification</th>
-                <th className="px-4 py-2.5 text-right w-24">Answer</th>
-                <th className="px-4 py-2.5">Correct Value</th>
+                <th className="px-4 py-2.5 w-20">{t.colQNo}</th>
+                <th className="px-4 py-2.5 w-28">{t.colSection}</th>
+                <th className="px-4 py-2.5">{t.colTopic}</th>
+                <th className="px-4 py-2.5 w-28">{t.colDifficulty}</th>
+                <th className="px-4 py-2.5 w-52">{t.colClassification}</th>
+                <th className="px-4 py-2.5 text-right w-24">{t.colAnswer}</th>
+                <th className="px-4 py-2.5">{t.colCorrectValue}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {filteredKey.map((q) => {
+                const loc = getLocalizedQuestion(q, lang);
                 const diffClass =
                   q.difficulty === 'Easy'
                     ? 'text-emerald-700'
@@ -296,20 +364,24 @@ export function AnswerKeyView() {
                       Q{q.id}
                     </td>
                     <td className="px-4 py-2.5 text-xs font-mono text-slate-600">
-                      Sec {q.sectionId}
+                      {SECTION_TEXT[q.sectionId].code[lang]}
                     </td>
                     <td className="px-4 py-2.5 font-medium text-slate-900">
-                      {q.topic}
+                      {localizeTopic(q.topic, lang)}
                     </td>
-                    <td className={`px-4 py-2.5 text-xs font-semibold ${diffClass}`}>
-                      {q.difficulty}
+                    <td
+                      className={`px-4 py-2.5 text-xs font-semibold ${diffClass}`}
+                    >
+                      {localizeDifficulty(q.difficulty, lang)}
                     </td>
-                    <td className="px-4 py-2.5 text-xs text-slate-500">{q.label}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-500">
+                      {localizeLabel(q.label, lang)}
+                    </td>
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-900">
                       {q.correctOption}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-slate-700 max-w-xs truncate">
-                      {q.options[q.correctOption]}
+                      {loc.options[q.correctOption]}
                     </td>
                   </tr>
                 );

@@ -1,19 +1,23 @@
 import { EXAM_PITFALLS, KEY_FORMULAS } from '../data/mockPaper';
+import { Language, UI_TEXT } from '../i18n/ui';
 
-export function FormulasView() {
+interface FormulasViewProps {
+  lang: Language;
+}
+
+export function FormulasView({ lang }: FormulasViewProps) {
+  const t = UI_TEXT[lang];
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <section className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-2">
         <div className="text-xs font-semibold text-blue-700">
-          Quick Revision Reference · CEN No. 08/2026
+          {t.formulasKicker}
         </div>
-        <h1 className="text-2xl font-bold text-slate-900">
-          Key Formulas, Shortcuts & Common Exam Pitfalls
-        </h1>
+        <h1 className="text-2xl font-bold text-slate-900">{t.formulasTitle}</h1>
         <p className="text-sm text-slate-600 max-w-3xl leading-relaxed">
-          High-yield mathematical identities, physics relationships, DI conversion tricks, and the
-          most frequent negative-marking traps tested in the RRB Station Master CBT.
+          {t.formulasSubtitle}
         </p>
       </section>
 
@@ -25,7 +29,9 @@ export function FormulasView() {
             className="bg-white border border-slate-200 rounded-xl overflow-hidden"
           >
             <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200">
-              <h2 className="text-base font-bold text-slate-900">{group.category}</h2>
+              <h2 className="text-base font-bold text-slate-900">
+                {lang === 'hi' ? group.categoryHi : group.category}
+              </h2>
             </div>
             <div className="divide-y divide-slate-100">
               {group.items.map((item) => (
@@ -34,7 +40,7 @@ export function FormulasView() {
                   className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-6 items-baseline"
                 >
                   <div className="lg:col-span-3 text-sm font-semibold text-slate-900">
-                    {item.name}
+                    {lang === 'hi' ? item.nameHi : item.name}
                   </div>
                   <div className="lg:col-span-5">
                     <code className="block px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-xs sm:text-sm font-mono text-blue-900">
@@ -42,7 +48,7 @@ export function FormulasView() {
                     </code>
                   </div>
                   <div className="lg:col-span-4 text-xs sm:text-sm text-slate-600 leading-relaxed">
-                    {item.note}
+                    {lang === 'hi' ? item.noteHi : item.note}
                   </div>
                 </div>
               ))}
@@ -55,7 +61,7 @@ export function FormulasView() {
       <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="px-5 py-4 bg-slate-50 border-b border-slate-200">
           <h2 className="text-base font-bold text-slate-900">
-            Seven High-Frequency CBT Exam Pitfalls & How to Avoid Them
+            {t.pitfallsTitle}
           </h2>
         </div>
         <div className="divide-y divide-slate-100">
@@ -65,18 +71,24 @@ export function FormulasView() {
               className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-6"
             >
               <div className="lg:col-span-3">
-                <div className="text-xs font-mono text-slate-400">0{idx + 1}</div>
+                <div className="text-xs font-mono text-slate-400">
+                  0{idx + 1}
+                </div>
                 <div className="text-sm font-bold text-slate-900 mt-0.5">
-                  {item.area}
+                  {lang === 'hi' ? item.areaHi : item.area}
                 </div>
               </div>
               <div className="lg:col-span-4 text-sm text-slate-700 leading-relaxed">
-                <span className="font-semibold text-rose-700">Pitfall: </span>
-                {item.pitfall}
+                <span className="font-semibold text-rose-700">
+                  {t.pitfallLabel}{' '}
+                </span>
+                {lang === 'hi' ? item.pitfallHi : item.pitfall}
               </div>
               <div className="lg:col-span-5 text-sm text-slate-700 leading-relaxed">
-                <span className="font-semibold text-emerald-800">Prevention: </span>
-                {item.prevention}
+                <span className="font-semibold text-emerald-800">
+                  {t.preventionLabel}{' '}
+                </span>
+                {lang === 'hi' ? item.preventionHi : item.prevention}
               </div>
             </div>
           ))}
